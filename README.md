@@ -1,6 +1,14 @@
 # dataform-playground-boilerplate
 A collection of files and snippets to bootstrap a new Dataform repo in GCP.
 
+If you're looking for a script to create a handful of data tables, check the create_commodities_tables.sqlx file in this repo.
+
+If you're looking for a Dataform tutorial, follow the steps below. 
+
+Pre-requisites to the steps below:
+- Have a Google Cloud Platform project already, or open a free trial (they provide $300 in credits. These steps won't burn more than $5 of the $300 free trial credits).
+- Have sufficient IAM permissions, and enable Dataform and give the Dataform service account the needed roles for connecting to BigQuery.
+
 ## Step 1: Create and Structure your Dataform Repo
 - Create a new dataform repo
 - Create a workspace
@@ -10,13 +18,16 @@ A collection of files and snippets to bootstrap a new Dataform repo in GCP.
 
 My yaml file looks like this:
 
-```
-defaultProject: ***your project id here***
+###### workflow_settings.yaml
+```sql
+defaultProject: your_project_id_here
 defaultLocation: asia-east2
 defaultDataset: dataform_playground
 defaultAssertionDataset: dataform_assertions
 dataformCoreVersion: 3.0.0
 ```
+
+***
 
 ## Step 2: Create a new tables from Dataform
 
@@ -24,7 +35,8 @@ dataformCoreVersion: 3.0.0
 I've created a dataset called `dataform_playground` and will call this table `radio_spelling_alphabet`.
 I put this code below in a file called `create_radio_alphabet.sqlx` in the `/extra` folder.
 
-```
+###### definitions/extra/create_radio_alphabet.sqlx
+```sql
 config {
     type: "operations"
 }
@@ -65,7 +77,7 @@ WHERE NOT num IS NULL
 When you run this file, because it is a `type: "operations"`, it will execute the SQL as-is and create the table.
 
 Chances are, you haven't yet created the dataset `dataform_playground` though, so go ahead and create that now, either via the BQ console or with this SQL:
-```
+```sql
 CREATE SCHEMA IF NOT EXISTS `project_id.dataset_name`
 OPTIONS(
   location = 'US' -- use your project's location, as seen in the workflow_settings.yaml file
@@ -73,9 +85,11 @@ OPTIONS(
 ```
 You can run the above SQL snippet from BQ or Dataform. Then re-run the `create_radio_alphabet.sqlx` so that the table is successfully created.
 
+
 Now create a file to see the results of that table. Let's create that file in the `/intermediate` folder and call the file `radio_alphabet_consonants.sqlx`.
 
-```
+###### definitions/intermediate/radio_alphabet_consonants.sqlx
+```sql
 config {
     type: "view"
 }
@@ -87,29 +101,52 @@ WHERE num NOT IN (1,5,9,15,21)
 ORDER BY num
 ```
 
-This ought to show you the results, without the `Echo` row. However, in Dataform we want to use a special feature to refer to tables in our query. Instead of explicitly writing `FROM dataform_playground.radio_alphabet` we instead want to write:
+This ought to show you the results, without the vowels rows. However, in Dataform we want to use a special feature to refer to tables in our query. Instead of explicitly writing `FROM dataform_playground.radio_alphabet` we instead want to write:
 
 `FROM ${ref("radio_alphabet")}`
 
 Change that in your file now, and run it. 
 
-You'll likely get the error message `Could not resolve "radio_alphabet"` because we've not yet declared this table in our `/sources` folder. Let's do that now -- create a file in the sources folder with the exact same name as the bigquery table (the table we created is called `radio_alphabet` so your file should be named `radio_alphabet.sqlx`).
+###### definitions/intermediate/radio_alphabet_consonants.sqlx
+```sql
+config {
+    type: "view"
+}
+
+SELECT
+*
+FROM ${ref("radio_alphabet")}
+WHERE num NOT IN (1,5,9,15,21)
+ORDER BY num
+```
+
+You'll likely get the error message `Could not resolve "radio_alphabet"`. The Dataform compiler is unable to reference `radio_alphabet` because we've not yet declared this table in our `/sources` folder. Let's do that now -- create a file in the sources folder with the exact same name as the bigquery table (the table we created is called `radio_alphabet` so your file should be named `radio_alphabet.sqlx`). 
 
 Give the file the needed declaration:
-```
+```sql
 config {
   type: "declaration",
-  database: "*** your project id here ***",
+  database: "your_project_id_here",
   schema: "dataform_playground",
   name: "radio_alphabet",
 }
 ```
 
-Now go back to /intermediate/radio_alphabet_consonants.sqlx and run it. Notice how the "Compiled Queries" tab (on the righthand side of the editor) shows the explicit FROM clause. The ${ref()} function is changed by the Dataform compiler to express the explicit reference.
+Now go back to `/intermediate/radio_alphabet_consonants.sqlx` and run it. Notice how the "Compiled Queries" tab (on the righthand side of the editor) shows the explicit FROM clause. The ${ref()} function is changed by the Dataform compiler to express the explicit reference.
+
+![image of compiled query failed to load](img/dataform_compiled_queries.jpeg "Screenshot of compiled query")
+
+And the results...
+
+![image of results failed to load](img/radio_alphabet_consonants_results.png "Screenshot of the query results")
 
 Using the ${ref()} feature is something we always want to do in Dataform, as a best practice.
 
 Now that you've made a few files and your repo is compiling successfully, go ahead and commit your changes. Give a commit message (ideally in the present tense) and push.
+
+
+
+***
 
 ## Step 3: Add a few more data tables
 
@@ -117,11 +154,14 @@ I've prepared a handful of datasets we can use for experimentation with Dataform
 
 Use the `create_commodities_tables.sqlx` file I've provided in the repo. Copy and paste this into a Dataform file `definitions/extra/create_commodities_tables.sqlx`, and run it.
 
+***
+
 ## Step 4: Declare the tables so they can be referenced via `${ref()}`
 
-Make a new file for the `oil` data table. Note that the filename must match the table name exactly. So you'll make a file `/definitions/sources/oil.sqlx` and the file will have only six lines:
+Make a new file for the `oil` data table. Note that the filename must match the table name exactly. Declaration files have only a config block with a few lines:
 
-```
+###### /definitions/sources/oil.sqlx
+```sql
 config {
   type: "declaration",
   database: "tokyo-hold-441414-t2",
@@ -132,13 +172,16 @@ config {
 
 Now click the three dots on this file from the Files Pane and select `Duplicate` and give this new file the name `/definitions/sources/gold.sqlx` and change line 5 to `name: "gold"`.
 
-Do this step again for the `inflation` data table.
+Do this step again for the `inflation` data table, and all the other tables you have created. It's a few minutes of tediousness, but required. 
 
-## Step 5: Make a view to union all the data tables
+***
 
-Each data table has three columns and can be unioned to create a view to pipe into a Looker Explore, so let's create that view. I'm deciding to put this view in the /intermediate folder, because I consider it a "silver" tier view. I'll explain this more later. Create the file `definitions/intermediate/commodities_and_inflation.sqlx` and fill it with the SQL.
+## Step 5: Make a view to union the data tables
 
-```
+Each data table has three columns and can be unioned to create a view (which you might consider to pipe into a Looker Explore if your project uses Looker), so let's create that view. I'm deciding to put this view in the `/intermediate` folder, because I consider it a "silver" tier view per medallion architecture ideology. I'll explain this more later. Create the file and fill it with the SQL.
+
+###### definitions/intermediate/commodities_and_inflation.sqlx
+```sql
 config {
     type: "view"
 }
@@ -242,9 +285,14 @@ percent_change,
 from ${ref("rice")}
 ```
 
-Now let's make another view to `SELECT *` from the view we just made. We'll put the new view in the ouputs folder (as a gold tier query, per medallion architecture). In the `definitions/output/v_commodities_and_inflation.sqlx` file we'll put the following query:
+Go ahead and run it, to see the output results. 
 
-```
+![image of results failed to load](img/commodities_and_inflation.png "Screenshot of the query results")
+
+Now let's make another view to `SELECT *` from the view we just made. We'll put the new view in the ouputs folder (as a gold tier query, per medallion architecture).
+
+###### definitions/output/v_commodities_and_inflation.sqlx
+```sql
 config {
     type: "view"
 }
@@ -252,12 +300,37 @@ config {
 select * from ${ref("commodities_and_inflation")}
 ```
 
-Notice that we get an error. The ${ref()} was unable to find the view we made in the /intermediate folder. Why? Because we've not yet executed the file, we've only written the file in the Dataform repo but not actually executed code to state `create or replace view`. So let's do that now. Click on the `/intermediate/commodities_and_inflation.sqlx` file and click `START EXECUTION` > `Actions` > `commodities_and_inflation`. Click the blue button `Start Execution`. At the bottom of the console, you should see a small popup saying `Successfully created workflow execution - DETAILS` and you can click the DETAILS word to see what happened. Do that now. It shows you the code that Dataform executed for you (via the Dataform service account) and around line 24 you see it runs `create or replace view`.
+Notice that we get an error. 
 
-Go back into your workspace and run again the file `/output/v_commodities_and_inflation.sqlx`. It should run without errors this time, because it was able to find the referenced view. 
+![image failed to load](img/commodities_and_inflation_not_found.png "Screenshot of the error message")
 
-You might also ask, why did we name the output file with a `v_` prefix? We did this as a convention to denote this is a view, and specifically an ouput-folder view. When browsing through BigQuery, we won't be able to see which views are `/intermediate` and which are `/ouput`. If we follow this prefix convention, it will make our BigQuery datasets easier to troubleshoot and navigate. Using `select *` as a gold-tier query is a standard practice in data engineering so that other views, models, Looker Explores, etc., can point to the gold-tier query reliably, even when the underlying data sources and views are regularly changing. This reduces the technical burden during migrations, new 3rd party datasets being weaved in, architectural changes, etc. 
+The ${ref()} was unable to find the view we made in the `/intermediate` folder. Why? Because we've not yet executed the file, we've only written the file in the Dataform repo but not actually executed code to state `create or replace view`. So let's do that now. 
 
+Click on the `/intermediate/commodities_and_inflation.sqlx` file and click `START EXECUTION` > `Actions` > `commodities_and_inflation`. Click the button at the bottom of the popup `Start Execution`. 
+
+![image failed to load](img/commodities_and_inflation_execution.png "Screenshot of the execution")
+
+At the bottom of the console, you should see a small popup saying `Successfully created workflow execution - DETAILS` and you can click the DETAILS word to see what happened. Do that now. 
+
+![image failed to load](img/successful_execute.png "Screenshot of the success message")
+
+It shows you the code that Dataform executed for you (via the Dataform service account) and around line 24 you see it runs `create or replace view`.
+
+![image failed to load](img/executed_code.png "Screenshot of the executed code")
+
+Go back into your workspace and run again the file `/output/v_commodities_and_inflation.sqlx`. It should run without errors this time, because it was able to find the referenced view (because we've now created the view by executing the dataform file'). 
+
+You might also ask, why did we name the output file with a `v_` prefix? We did this as a convention to denote this is a view, and specifically an `/ouput` folder view. When browsing through BigQuery, we won't be able to see which views are `/intermediate` and which are `/ouput`. If we follow this prefix convention, it will make our BigQuery datasets easier to troubleshoot and navigate. Using `select *` as a gold-tier query is a standard practice in data engineering so that other views, models, Looker Explores, etc., can point to the gold-tier query reliably, even when the underlying data sources and views are regularly changing. This reduces the technical burden during migrations, new 3rd party datasets being weaved in, architectural changes, etc. Your project leader might use a different convention. Check with your project leader to see what conventions are being used.
+
+Your files pane now ought to look something like this:
+
+![image failed to load](img/files_pane.png "Screenshot of the files pane")
+
+And from BigQuery, it ought to look similar to this:
+
+![image failed to load](img/bigquery_pane.png "Screenshot of the files pane")
+
+***
 
 ## Step 6: Do a quick exploration of the data to look for insights
 
@@ -265,8 +338,8 @@ Write a view to isolate gold, rice, and bananas and chart their price as separat
 
 Go ahead and write this from scratch in the /extra folder as a view. We're just going to use the BigQuery charting tool, so we'll need to pivot on the commodities.
 
-definitions/extra/gold_or_rice_or_bananas.sqlx
-```
+###### definitions/extra/gold_or_rice_or_bananas.sqlx
+```sql
 config {
     type: "view"
 }
@@ -277,7 +350,7 @@ cast(month_ as date) as month_,
 data_type,
 -- convert price per kilo to metric ton for bananas, to compare with rice metric ton and gold troy ounce
 sum(case when data_type = "bananas" then price * 1000 else price end) as price, 
-from `tokyo-hold-441414-t2.dataform_poc.v_commodities_and_inflation`
+from ${ref("v_commodities_and_inflation")}
 where data_type in ("bananas", "rice", "gold")
 and month_ > "1994-12-01"
 group by all
@@ -290,15 +363,100 @@ sum(price) FOR data_type IN ("bananas", "rice", "gold")
 order by month_ asc
 ```
 
-Now run it. Then click the three dots in the top right of the results pane in Dataform, and select `View job in SQL workspace`. This will open BigQuery in a new tab, and show the same results. We can then click the `Chart` tab (it doesn't seem to work in Dataform, but the Chart tab works from BigQuery). 
+Now run it. Then click the three dots in the top right of the results pane in Dataform, and select `View job in SQL workspace`. 
+
+
+![image failed to load](img/view_in_sql_workspace.png "Screenshot of the SQL Workspace navigation")
+
+This will open BigQuery in a new tab, and show the same results. We can then click the `Chart` tab (it doesn't seem to work in Dataform, but the Chart tab works from BigQuery). Typically we'll use Looker or another dashboarding tool for charting, but sometimes in the data exploration phase, the BigQuery charting feature can be useful for simple explorations like this one.
+
+![image failed to load](img/gold_rice_bananas_chart.png "Screenshot of the chart")
 
 You should see three lines, which begin around the same price in the 1990s, but begin separating widely around 2008. 
 
+***
+
 ## Step 7: Find commodities whose price is correlated
+
+Now that we've seen the data visualized, let's find out if any of the commodities are statistically correlated. 
+
+###### definitions/extra/commodity_correlation_example.sqlx
+```sql
+config {
+    type: "view"
+}
+
+select
+corr(gold, bananas) as gold_banana,
+corr(gold, rice) as gold_rice,
+corr(bananas, rice) as banana_rice
+from ${ref("gold_or_rice_or_bananas")}
+```
+
+| gold_banana | gold_rice | banana_rice |
+| :------------------- | :----------: | ----------: |
+| 	0.917   	      | 0.764     | 0.682      |
+
+
+You can see from the output, that gold and bananas are tightly correlated, moreso than gold & rice and moreso than banana & rice. 
+
+Since we've found a good correlation, we can use the price of gold to forecast the price of bananas, and vice-versa, using BQML's arima_xreg model. Arima models are usually simple calculations, but the XREG model of arima can use multiple variables (so long as they are correlated) to make forecasts.  Therefore, it's important to find out which data points are correlated and which are not.
+
+To learn more about BQML, see the ______________ readme walkthrough (in progress). 
+
+
+To be thorough, let's look at other correlation possibilities.
+
+###### definitions/extra/commodity_correlation.sqlx
+```sql
+config {
+    type: "view"
+}
+
+with pivot_setup as (
+select
+cast(month_ as date) as month_, 
+data_type,
+price, 
+from `tokyo-hold-441414-t2.dataform_poc.v_commodities_and_inflation`
+where month_ > "1994-12-01"
+)
+
+, pivoted_commodities as (
+SELECT * FROM pivot_setup
+PIVOT(
+sum(price) FOR data_type IN ("bananas", "rice", "gold","silver","copper","oil","diesel","gas","beef","coffee","inflation")
+)
+order by month_ asc
+)
+
+select
+corr(gold, bananas) as gold_banana,
+corr(gold, rice) as gold_rice,
+corr(gold, coffee) as gold_coffee,
+corr(gold, beef) as gold_beef,
+corr(gold, oil) as gold_oil,
+corr(gold, gas) as gold_gas,
+corr(gold, diesel) as gold_diesel,
+corr(gold, copper) as gold_copper,
+corr(gold, silver) as gold_silver,
+corr(gold, inflation) as gold_inflation,
+
+corr(oil, bananas) as 	oil_banana,
+corr(oil, rice) as 		oil_rice,
+corr(oil, coffee) as 	oil_coffee,
+corr(oil, beef) as 		oil_beef,
+corr(oil, gas) as 		oil_gas,
+corr(oil, diesel) as 	oil_diesel,
+corr(oil, copper) as 	oil_copper,
+corr(oil, silver) as 	oil_silver,
+corr(oil, inflation) as oil_inflation
+from pivoted_commodities
+```
 
 
 To do:
-- correlation query
+- continue basics walkthrough
 - BQML forecast arima_xreg & arima_plus
 - Pipe Syntax
 
