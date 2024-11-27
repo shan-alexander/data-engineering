@@ -1,4 +1,4 @@
-# dataform-playground-boilerplate
+# Newton's Dataform Introduction and Tutorial
 A collection of files and snippets to bootstrap a new Dataform repo in GCP.
 
 If you're looking for a script to create a handful of data tables, check the create_commodities_tables.sqlx file in this repo.
