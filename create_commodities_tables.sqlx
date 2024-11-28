@@ -1,5 +1,6 @@
 config {
-    type: "operations"
+    type: "operations",
+    description: "data sourced from https://www.indexmundi.com/commodities/?commodity=gold"
 }
 
 
