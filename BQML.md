@@ -1,8 +1,8 @@
 # Newton's BQML Tutorial
 
-This BQML tutorial has a pre-requisite of completing the Dataform tutorial (the [readme.md](https://github.com/shan-alexander/dataform-playground-boilerplate?tab=readme-ov-file#dataform-playground-boilerplate) file in this repo), in which you'll create the tables and views on which our BQML will depend.
+This BQML tutorial has a pre-requisite of completing the Dataform tutorial (the [readme.md](https://github.com/shan-alexander/dataform-playground-boilerplate#newtons-dataform-introduction-and-tutorial) file in this repo), in which you'll create the tables and views on which our BQML will depend.
 
-[Pre-requisite Dataform Tutorial](https://github.com/shan-alexander/dataform-playground-boilerplate?tab=readme-ov-file#dataform-playground-boilerplate)
+[Pre-requisite Dataform Tutorial](https://github.com/shan-alexander/dataform-playground-boilerplate#newtons-dataform-introduction-and-tutorial)
 
 Alternatively, you can run the create_commodities_tables.sqlx in this repo and _____ file to skip the Dataform tutorial and jump straight into BQML.
 
@@ -58,10 +58,77 @@ Notice in BigQuery you now have a model available:
 
 ## Step 2: Use the Arima Plus model to forecast
 
+###### definitions/extra/forecast_arima_plus_bananas_price.sqlx
+```sql
+config {
+   type: "operations"
+}
 
 
-## Step 3: Create an Arima XREG model
+js {
+   const horizon = 90;
+   const confidence_level = 0.9;
 
 
-## Step 4: Use the Arima XREG model to forecast
+   module.exports = {
+     horizon, confidence_level
+ };
+}
+create or replace table dataform_playground.forecast_arima_plus_bananas_price as (
+SELECT
+   DATE(forecast_timestamp) AS month_,
+   CAST(forecast_value AS INT64) AS forecast_price,
+   standard_error,
+   CAST(prediction_interval_lower_bound AS INT64) AS forecast_price_lower_bound,
+   CAST(prediction_interval_upper_bound AS INT64) AS forecast_price_upper_bound
+FROM
+   ML.FORECAST(MODEL dataform_playground.arima_plus_bananas_price,
+               STRUCT(${horizon} AS horizon,
+                      ${confidence_level} AS confidence_level)
+               )
+order by month_ asc
+);
+```
+
+Run the file in Dataform, and in the Results pane, click the three dots and view the job in Big Query:
+
+![image failed to load](img/view_forecast_in_bq.png "Screenshot of the model in BigQuery")
+
+Now we're cooking. View the table created by the job and click the Preview tab so we can take a look at the data forecasted.
+
+![image failed to load](img/integer_forecast_in_bq.png "Screenshot of the table Preview in BigQuery")
+
+Notice that the forecast is an integer... we made a mistake. We need to forecast with decimal values, as this is the price of bananas per kilogram in USD, so the decimal cents are important.
+
+Change your forecast file to cast the integers to decimals, like this:
+```sql
+CAST(forecast_value AS decimal) AS forecast_price,
+standard_error,
+CAST(prediction_interval_lower_bound AS decimal) AS forecast_price_lower_bound,
+CAST(prediction_interval_upper_bound AS decimal) AS forecast_price_upper_bound
+```
+
+Now check that the table has decimals for the price column.
+
+![image failed to load](img/decimal_forecast_in_bq.png "Screenshot of the table Preview in BigQuery")
+
+
+
+## Step 3: Duplicate the Arima Plus for correlations
+
+We know from our previous exploration (definitions/extra/commodity_correlations.sqlx) that prices are correlated for bananas & gold (0.917), gold & beef (0.919),  and gold & silver (0.905). 
+
+Let's predict the price of gold.
+
+So we'll use arima plus to forecast the price of bananas, and in a separate model, the price of beef, and a separate model for silver. Then we'll pass the historical data of all four datapoints (gold, bananas, beef, silver) into the Arima XREG model, as well as the forecast data of the three Arima Plus models, and XREG will "solve for x" in which x is the price of gold. And in theory, the XREG model will provide a lower mean error than simply creating an Arima Plus model on the price of gold.
+
+Duplicate your `definitions/extra/arima_plus_bananas_price.sqlx` file for beef, and then again for silver. Duplicate also their forecast scripts.
+
+
+## Step 4: Create an Arima XREG model
+
+
+
+
+## Step 5: Use the Arima XREG model to forecast
 
