@@ -14,37 +14,52 @@ Once you've signed up with GCP, you'll see "My First Project" in the top left. C
 
 Navigate to the BigQuery > Dataform tool. Click "Create Repository", give it a hyphenated name (I name the repo "dataform-playground" on my instance). Choose any location for the repo.
 
-![Image of Dataform in GCP][Create Repo in Dataform](./img/dataform_create_repo.png)
+![image failed to load](img/dataform_create_repo.png "Create Repo in Dataform")
+
 
 Upon creating, you'll get a message like this:
 
-![Image of Dataform in GCP][Repo Created Message in Dataform](./img/repo_created_sa_msg.png)
+![image failed to load](img/repo_created_sa_msg.png "Repo Created Message in Dataform")
 
-Take a screenshot, or copy&paste the name of this service account into a notepad. Mine is `57489593326@gcp-sa-dataform.iam.gserviceaccount.com`. If you fail to write down this ID, you can find the name of the service account in
+Take a screenshot, or copy&paste the name of this service account into a notepad. If you fail to write down this ID, you can find the name of the service account by navigating to `Dataform > Your Repo > Settings tab > Edit Service Account Icon`.
 
-Note how the message says the service account needs the `roles/bigquery.jobUser` role. It actually needs more than this role, so let's get that process started.
+![image failed to load](img/find_dataform_sa_name_step1.png "How to find your Dataform Service Account name")
+
+Click the Edit icon to see the name:
+
+![image failed to load](img/find_dataform_sa_name_step2.png "How to find your Dataform Service Account name")
+
+Although GCP let us know the service account needs the `roles/bigquery.jobUser` role, it actually needs more roles to have any helpful functionality, so let's get that process started.
 
 ## Step 3: Grant permissions to service account
 
-- roles/iam.serviceAccountTokenCreator
+You can navigate to `IAM & Admin > IAM` and see the list of Principals. Then click Grant Access.
 
-BigQuery Job User: roles/bigquery.jobUser
-BigQuery Data Editor: roles/bigquery.dataEditor
-BigQuery Data Viewer: roles/bigquery.dataViewer
-BigQuery Data Owner: roles/bigquery.dataOwner
+![Image of Dataform in GCP][Grant Access for your Dataform Service Account](./img/iam_grant_access_to_sa.png)
 
-Before you click "Save", it should look like:
+Enter the name of your Service Account, and it should be selected from the dropdown. Then add roles by searching and selecting them:
 
-![image here]()
+![Image of Dataform in GCP][Add roles your Dataform Service Account](./img/iam_add_roles_to_sa.png)
+
+You will need the following roles:
+
+- BigQuery Job User: roles/bigquery.jobUser
+- BigQuery Data Editor: roles/bigquery.dataEditor
+- BigQuery Data Viewer: roles/bigquery.dataViewer
+- BigQuery Data Owner: roles/bigquery.dataOwner
+
+When finished, it should look like this:
+
+![Image of Dataform in GCP][Roles needed for your Dataform Service Account](./img/iam_roles_needed_for_sa.png)
 
 You can consider other roles like:
 
 Dataform Admin (roles/dataform.admin): For managing Dataform repositories, including creation and deletion.
 Composer Worker (roles/composer.worker): If you are using Cloud Composer to schedule Dataform runs.
 
-But we might not use these...
+But we won't need these right now.
 
-Now go back to Dataform.
+Go back to your Dataform repo.
 
 ## Step 4: Create a workspace
 
