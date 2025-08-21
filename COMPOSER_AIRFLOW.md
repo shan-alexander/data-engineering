@@ -15,17 +15,15 @@ When you create an environment in Cloud Composer, you'll want to assign it a ser
 - roles/composer.worker
 - roles/iam.serviceAccountUser
 
-[image here]
-
 ## Step 2: Create a Cloud Composer Environment
 
 From the Cloud Composer landing page, create an environment, and assign it the service account you just created.
 
-[image here]
+![image failed to load](img/composer_create_environment.png "Screenshot of the Create Environment page for Cloud Composer")
 
 It will take a few minutes to prepare the environment. Once ready, enter the environment, and go to the DAGs tab, and open the DAGs folder.
 
-[image here]
+![image failed to load](img/composer_dag_tab.png "Screenshot of the DAG tab in Cloud Composer")
 
 ## Step 3: Upload your DAG python file
 
@@ -68,7 +66,7 @@ default_args = {
 with DAG(
     dag_id="fetch_weather_data_daily",
     default_args=default_args,
-    description="Triggers Cloud Run function to fetch weather data for multiple cities daily",
+    description="Triggers Cloud Run function to fetch weather data for multiple cities daily from Open Meteo free API",
     schedule_interval="@daily",
     catchup=False,  # Avoid backfilling
 ) as dag:
@@ -97,9 +95,9 @@ After a few minutes, the DAG should appear in your `Composer > Environment > DAG
 
 As the DAG runs, you'll see logs and success/fail messages.
 
-[image here]
+![image failed to load](img/dag_partial_fail_api_limit.png "Screenshot of the task successes and fails for the DAG")
 
-This DAG will actually fail some of the tasks because it reaches the limit of what the free API on Open Meteo will offer in a single day.
+Some of the tasks in this DAG will fail because it reaches the limit of what the free API on Open Meteo will offer in a single day.
 
 Learn more about writing DAGs for Airflow / Cloud Composer at [https://cloud.google.com/composer/docs/composer-3/write-dags](https://cloud.google.com/composer/docs/composer-3/write-dags).
 
@@ -111,5 +109,7 @@ That's it! You've successfully:
 - Created a 2nd gen Cloud Run Function using Golang to extra data from an API and ingest it into BigQuery
 - Setup a Cloud Composer environment and service account
 - Created a DAG and manually triggered it
+
+You can head over to BigQuery to see the newly ingested data, and write a few Dataform sqlx files to transform that data into something insightful.
 
 There's much more to learn, in future iterations of this training pack I'll add more useful examples of Cloud Composer, which for the current tutorial is a bit of overkill (would be cheaper to use Cloud Scheduler for this use-case).

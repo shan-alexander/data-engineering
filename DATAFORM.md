@@ -131,11 +131,11 @@ config {
 
 Now go back to `/intermediate/radio_alphabet_consonants.sqlx` and run it. Notice how the "Compiled Queries" tab (on the righthand side of the editor) shows the explicit FROM clause. The ${ref()} function is changed by the Dataform compiler to express the explicit reference.
 
-![image of compiled query failed to load](img/dataform_compiled_queries.jpeg "Screenshot of compiled query")
+![image failed to load](img/dataform_compiled_queries.jpeg "Screenshot of compiled query")
 
 And the results...
 
-![image of results failed to load](img/radio_alphabet_consonants_results.png "Screenshot of the query results")
+![image failed to load](img/radio_alphabet_consonants_results.png "Screenshot of the query results")
 
 Using the ${ref()} feature is something we always want to do in Dataform, as a best practice.
 
@@ -284,7 +284,7 @@ from ${ref("rice")}
 
 Go ahead and run it, to see the output results.
 
-![image of results failed to load](img/commodities_and_inflation.png "Screenshot of the query results")
+![image failed to load](img/commodities_and_inflation.png "Screenshot of the query results")
 
 Now let's make another view to `SELECT *` from the view we just made. We'll put the new view in the ouputs folder (as a gold tier query, per medallion architecture).
 
@@ -399,7 +399,7 @@ You can see from the output, that gold and bananas are tightly correlated, mores
 
 Since we've found a good correlation, we can use the price of gold to forecast the price of bananas, and vice-versa, using BQML's arima_xreg model. Arima models are usually simple calculations, but the XREG model of arima can use multiple variables (so long as they are correlated) to make forecasts.  Therefore, it's important to find out which data points are correlated and which are not.
 
-To learn more about BQML, see the [BQML Readme](BQML.md ./BQML.md) readme walkthrough (still a work-in-progress).
+To learn more about BQML, see the [BQML Readme](BQML.md) readme walkthrough (still a work-in-progress).
 
 
 To be thorough, let's look at other correlation possibilities.
@@ -453,7 +453,5 @@ from pivoted_commodities
 
 
 To do:
-- continue basics walkthrough
-- BQML forecast arima_xreg & arima_plus
-- Pipe Syntax
-- Cloud Composer
+- continue basics walkthrough with more depth
+- Add Pipe Syntax examples
