@@ -35,11 +35,11 @@ Although GCP let us know the service account needs the `roles/bigquery.jobUser` 
 
 You can navigate to `IAM & Admin > IAM` and see the list of Principals. Then click Grant Access.
 
-![Image of Dataform in GCP][Grant Access for your Dataform Service Account](./img/iam_grant_access_to_sa.png)
+![image failed to load][Grant Access for your Dataform Service Account](./img/iam_grant_access_to_sa.png)
 
 Enter the name of your Service Account, and it should be selected from the dropdown. Then add roles by searching and selecting them:
 
-![Image of Dataform in GCP][Add roles your Dataform Service Account](./img/iam_add_roles_to_sa.png)
+![image failed to load][Add roles your Dataform Service Account](./img/iam_add_roles_to_sa.png)
 
 You will need the following roles:
 
@@ -50,7 +50,7 @@ You will need the following roles:
 
 When finished, it should look like this:
 
-![Image of Dataform in GCP][Roles needed for your Dataform Service Account](./img/iam_roles_needed_for_sa.png)
+![image failed to load][Roles needed for your Dataform Service Account](./img/iam_roles_needed_for_sa.png)
 
 You can consider other roles like:
 
@@ -77,11 +77,7 @@ For our walkthrough, we'll keep it simple. Name the workspace whatever you like,
 
 Then in your empty workspace, you'll see the option to initialize it.
 
-![image here]()
-
 Click the button to initialize.
-
-![image here]()
 
 You'll now have a basic folder structure.
 
