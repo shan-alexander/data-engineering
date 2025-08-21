@@ -314,7 +314,7 @@ func main() {
 	log.Printf("ran the main function for testing")
 }
 ```
-> !Warning
+> [!WARNING]
 > Make sure you change the projectID variable to your project ID.
 
 Our entry point is `FetchWeatherData` so input that in the GCP console.
