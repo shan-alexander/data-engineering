@@ -1,5 +1,263 @@
 # Newton's Dataform tutorial
 
+## Introduction
+
+Many teams and companies are unsure of Dataform's intended use. Dataform is for the **Transform** layer in ELT (**e**xtract from api, **l**oad into data warehouse, **transform** into analytics tables for insights, dashboards, etc). If we are planning to use Airflow DAGs (GCP Cloud Composer) for handling API calls to ingest data, then we have the full ELT covered (Airflow for Extract and Load, Dataform for Transform).
+
+Here's an example of how that may look:
+
+![image failed to load](img/de_concept_airflow_dataform.png "Diagram of airflow + dataform concept, made by repo owner shan-alexander")
+
+In the example above, there is 1 dataform repo for Google Analytics. The airflow DAG:
+1. First ingests data from an external API
+2. Then compiles the Dataform repo
+3. Runs the SQLX files with the data_engineering tag
+4. Runs the SQLX files with the business_analytics tag
+
+Before we deep-dive into applied uses of Dataform, we need to understand this Airflow DAG layer, so we can better understand how to approach Dataform.
+
+Let's look at a psuedo-code example of an Airflow DAG using python. In this example, the DAG will ingest Google Analytics data from an API, store it in Google Cloud Storage as a JSON file, then load the new data into BigQuery, then compile the Dataform repo, execute the "data_engineering" tagged SQLX files first, followed by the "analytics_engineering" SQLX files.
+
+```python
+from __future__ import annotations
+
+import pendulum
+from datetime import date, timedelta
+import random
+import json
+
+from airflow.models.dag import DAG
+from airflow.operators.python import PythonOperator
+from airflow.providers.google.cloud.operators.bigquery import BigQueryLoadJobOperator
+from airflow.providers.google.cloud.operators.dataform import (
+    DataformCreateCompilationResultOperator,
+    DataformCreateWorkflowInvocationOperator,
+)
+from airflow.providers.google.cloud.transfers.gcs_to_bigquery import GCSToBigQueryOperator
+from airflow.providers.google.cloud.hooks.gcs import GCSHook
+
+# --- Configuration Variables ---
+PROJECT_ID = "your-gcp-project-id"
+LOCATION = "your-dataform-location"
+REPOSITORY_ID = "your-dataform-repository-id"
+GIT_COMMITISH = "main"
+
+# BigQuery settings for the ingestion table
+BQ_DATASET = "your_raw_ga_dataset"
+BQ_TABLE = "raw_ga_events_partitioned"
+
+# GCS settings for the landing zone
+GCS_BUCKET = "your-gcs-bucket"
+GCS_INGEST_PATH = "ga_data/events"
+
+# Backfill date range
+START_DATE = date(2025, 1, 1)
+END_DATE = date(2025, 1, 31)
+
+# --- Generate and upload data to GCS ---
+MOCK_API_BASE_URL = "https://jsonplaceholder.typicode.com"
+
+# --- Function definition to simulate API call and upload data to GCS ---
+def generate_and_upload_data_to_gcs(execution_date: date, **kwargs):
+    """
+    Simulates fetching high-volume data from an external API and uploads it
+    as a JSON file to Google Cloud Storage (GCS).
+    """
+    gcs_hook = GCSHook(gcp_conn_id="google_cloud_default")
+    ds = execution_date.strftime("%Y-%m-%d")
+
+    # --- API Call ---
+    print(f"Calling API endpoint: {MOCK_API_BASE_URL}/posts?_limit=100")
+    try:
+        response = requests.get(f"{MOCK_API_BASE_URL}/posts?_limit=100")
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        api_data = response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Error calling API: {e}")
+        # In a production DAG, you'd handle this error more gracefully,
+        # perhaps by retrying or sending a notification.
+        raise
+
+    # Transform API data into a format suitable for BigQuery ingestion
+    # For this example, we'll use the API data to create our mock GA events
+    json_lines = []
+    num_records = len(api_data) * random.randint(1, 5) # Simulate varying record counts
+    for i in range(num_records):
+        # Create a mock record using some data from the API response
+        record = {
+            "event_date": ds,
+            "user_id": f"user_{api_data[i % len(api_data)]['userId']}",
+            "event_name": random.choice(["page_view", "session_start", "add_to_cart", "purchase"]),
+            "value": random.uniform(0, 100) if random.random() > 0.9 else None
+        }
+        json_lines.append(json.dumps(record))
+
+    file_content = "\n".join(json_lines)
+    gcs_file_path = f"{GCS_INGEST_PATH}/{ds}.json"
+
+    print(f"Uploading {len(json_lines)} records to gs://{GCS_BUCKET}/{gcs_file_path}")
+    gcs_hook.upload(bucket_name=GCS_BUCKET, object_name=gcs_file_path, data=file_content, mime_type='application/json')
+
+    return gcs_file_path
+
+# --- Airflow DAG Definition ---
+with DAG(
+    dag_id="high_volume_ga_pipeline",
+    start_date=START_DATE,
+    end_date=END_DATE,
+    schedule=None,
+    catchup=True,
+    tags=["dataform", "ga", "backfill", "high-volume"],
+    description="Loads high-volume GA data from GCS and processes it with Dataform.",
+) as dag:
+
+    # Use a for loop to create a dynamic number of tasks for each date
+    ingestion_tasks = []
+    load_tasks = []
+
+    for dt in pendulum.period(start=START_DATE, end=END_DATE):
+        date_str = dt.strftime("%Y-%m-%d")
+
+        # Task 1: Generate and upload data to GCS
+        # This simulates a typical ingestion task from a source API to a landing zone
+        upload_task = PythonOperator(
+            task_id=f"upload_data_to_gcs_for_{date_str.replace('-', '_')}",
+            python_callable=generate_and_upload_data_to_gcs,
+            op_kwargs={"execution_date": dt},
+        )
+
+        # Task 2: Load data from GCS into BigQuery using BigQueryLoadJobOperator
+        # This is the highly efficient, best-practice method for high volume.
+        load_task = BigQueryLoadJobOperator(
+            task_id=f"load_to_bq_{date_str.replace('-', '_')}",
+            destination_project_dataset_table=f"{PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE}${dt.format('YYYYMMDD')}",
+            source_uris=[f"gs://{GCS_BUCKET}/{GCS_INGEST_PATH}/{date_str}.json"],
+            source_format="NEWLINE_DELIMITED_JSON",
+            write_disposition="WRITE_TRUNCATE", # Replace data for the partition on each run
+            autodetect=True,
+        )
+
+        # Define dependencies within the loop
+        upload_task >> load_task
+        ingestion_tasks.append(upload_task)
+        load_tasks.append(load_task)
+
+    # Task 3: Compile the entire Dataform repository
+    # This must run after all ingestion tasks are complete
+    compile_dataform_repo = DataformCreateCompilationResultOperator(
+        task_id="compile_dataform_repository",
+        project_id=PROJECT_ID,
+        location=LOCATION,
+        repository_id=REPOSITORY_ID,
+        git_commitish=GIT_COMMITISH,
+    )
+
+    # Task 4: Execute Dataform actions tagged "data_engineering"
+    run_data_engineering_stage = DataformCreateWorkflowInvocationOperator(
+        task_id="execute_data_engineering_stage",
+        project_id=PROJECT_ID,
+        location=LOCATION,
+        repository_id=REPOSITORY_ID,
+        compilation_result_id="{{ task_instance.xcom_pull('compile_dataform_repository', key='return_value') }}",
+        deferrable=True, # Recommended for long-running jobs to conserve worker resources
+        asynchronous=True,
+        workflow_invocation={
+            "compilation_result": (
+                f"projects/{PROJECT_ID}/locations/{LOCATION}/repositories/{REPOSITORY_ID}/compilationResults/"
+                + "{{ task_instance.xcom_pull('compile_dataform_repository', key='return_value') }}"
+            ),
+            "included_tags": ["data_engineering"],
+        },
+    )
+
+    # Task 5: Execute Dataform actions tagged "analytics_engineering"
+    run_analytics_engineering_stage = DataformCreateWorkflowInvocationOperator(
+        task_id="execute_analytics_engineering_stage",
+        project_id=PROJECT_ID,
+        location=LOCATION,
+        repository_id=REPOSITORY_ID,
+        compilation_result_id="{{ task_instance.xcom_pull('compile_dataform_repository', key='return_value') }}",
+        deferrable=True,
+        asynchronous=True,
+        workflow_invocation={
+            "compilation_result": (
+                f"projects/{PROJECT_ID}/locations/{LOCATION}/repositories/{REPOSITORY_ID}/compilationResults/"
+                + "{{ task_instance.xcom_pull('compile_dataform_repository', key='return_value') }}"
+            ),
+            "included_tags": ["analytics_engineering"],
+        },
+    )
+
+    # Define the final DAG dependencies
+    compile_dataform_repo << load_tasks
+    compile_dataform_repo >> run_data_engineering_stage >> run_analytics_engineering_stage
+```
+
+Let's discuss the high-level concepts in the DAG script above.
+
+1. **Imports and Variables**: The first lines of imports and variable assignments are straightforward.
+2. **Function definition for making an API request**: The next item in the script is a function definition to make a GET request from an API --- this is psuedo-code from an LLM to pretend as though it received thousands of events per day, and it **converts this API response into JSON to be stored in a landing zone** (Google Cloud Storage).
+3. **Ingestion task**: The Airflow task is created for ingesting data, which calls the getter function and sets the data in a JSON file in cloud storage.
+4. **BigQuery loader task**: Then task is created for loading the JSON GCS data into Bigquery. from This is a best-practice approach for high-volume data, leveraging the BigQueryLoadJobOperator which is the most performant way to ingest large batches of data from GCS into BigQuery, designed for scale and significantly faster and more cost-effective than running multiple inserts.
+5. **Compile Dataform repo task**: Then the DAG compiles the targeted dataform repo.
+6. **Run data_engineering scripts task**: This task runs all the SQLX files with the `data_engineering` tag.
+7. **Run analytics_engineering scripts task**: This task runs all the SQLX files with the `analytics_engineering` tag.
+8. **Define task dependency / sequence of execution**: The last two lines instruct Airflow as to the required ordering of task execution.
+
+If you're unfamiliar with the last lines of the DAG file, or why there are two lines instead of one, ask an LLM to explain these to you:
+
+```python
+compile_dataform_repo << load_tasks
+compile_dataform_repo >> run_data_engineering_stage >> run_analytics_engineering_stage
+```
+
+In short, the `<<` is required here because the `load_tasks` is a list of tasks, not a single task. Hence, we are required to separate the dependency sequence into two lines.
+
+**Where are the tags set?**
+
+In Dataform, you'll compose a `config {}` block at the top of every SQL script you write. The tag is set in this config block, like so:
+
+```js
+config {
+  type: "view",
+  schema: "ga_analytics",
+  name: "ga_daily_agg",
+  tags: ["analytics_engineering"] // This tag can be used by Airflow's DataformCreateWorkflowInvocationOperator
+}
+SELECT ... FROM ${ref("ga_events")} ...
+```
+
+Now that we understand how Dataform is designed to be used by Airflow, we can better understand how to configure and arrange Dataform.
+
+**Wait, why not just use Dataform for the ingestion?**
+
+Dataform is for transformation only, it cannot call out to external APIs to extract and load data. Dataform does have native scheduling (cron jobs), but these are limited to the transformation layer. While Dataform only offers transformations, Airflow offers versatile event-based pipelines, like ingesting from APIs or Cloud Storage buckets, email and slack notifications, and other integrations.
+
+## Repos and Workspaces
+
+In an empty instance of Dataform, you first create a repo, and then a workspace. How should we think about these two concepts? Should we create a mono-repo of ALL our transformation SQL, or separate repos into data engineering focused vs analytics focused, or maybe make a repo for each source of data? Maybe we have separate repos for ad revenue tracking, web traffic analytics, subscriptions, and other revenue streams?
+
+**The best-practice for Dataform in 2025 is to take a one-DAG one-repo approach**, in which the repo contains both data engineering (ingestion & loading) and analytics (transforming) SQL. This ensures no breakage can occur (because the Dataform compiler prevents commits that fail to compile).
+
+![image failed to load](img/dataform_repos_workspaces.png "Explanation of Dataform repos & workspaces, made by repo owner shan-alexander")
+
+**Summary of Concepts**
+
+- Dataform is a tool for the transformation aspect of ELT.
+- Airflow is a versatile tool for orchestrating the full ELT pipeline.
+- Dataform best-practice is to take a one-DAG one-repo approach.
+- The Dataform repo should contain both data engineering scripts and analytics scripts. Benefits include:
+  - Comprehensive Dependency Analysis: the dependency checker is analyzing the entire pipeline and ensuring cohesion.
+  - Unified Change Management: if data engineering changes a table schema upstream, Dataform will immediately know and surface the downstream tables that break / need updating. These updates will be required to successfully compile, and successful compilation is required to commit.
+  - Single, Cohesive Pipeline: The one-repository model creates a single, unified pipeline. This simplifies orchestration and monitoring. Instead of managing multiple, disconnected pipelines, you have one primary process to run and observe in tools like Airflow.
+  - Code Redundancy Elimination: DE and DA teams can share and reuse code. For example, a business analysis team can ref() a clean, validated table created by the data engineering team, rather than creating their own duplicate source file.
+
+---
+
+## Hands-on step-by-step guide to Dataform
+
+Based on the concepts above, we can now begin the hands-on portion of this guide. However, you will need a GCP instance and the required permissions / IAM setup to proceed. Make sure these pre-reqs are done first, and if you don't yet have a GCP instance, follow the steps in [GCP_STARTER.md](./GCP_STARTER.md).
+
 **Pre-requisites to the steps below**:
 - Have a Google Cloud Platform project already, or open a free trial (they provide $300 in credits. This tutorial won't burn more than $5 of the $300 free trial credits).
 - Have sufficient IAM permissions. If you are not creating a new GCP project (ie you are working in an existing GCP project of which you do not have owner permissions), you will need the `roles/dataform.editor` role on your GCP user (do this in IAM, or ask someone in your GCP project to grant this role to you).
