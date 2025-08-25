@@ -4,7 +4,7 @@ In Google Cloud Platform, Cloud Functions are essentially the equivalent to "AWS
 
 Dataform is great for working with data already in BigQuery, but is not useful for ingesting data from external, 3rd party APIs.
 
-To pull data from 3rd party APIs and ingest into GCP BigQuery, a Cloud Function is a great, cost-effective solution.
+To pull data from 3rd party APIs and ingest into GCP BigQuery, a Cloud Function is a great, cost-effective solution. You could use only an Airflow DAG "to house" this code, instead of a Cloud Function, but this can make the DAG more difficult to follow & troubleshoot, more difficult to isolate problems related to this ingestion, etc. The Cloud Function also has reuseability (it could be called by multiple DAGs, if necessary).
 
 ## Step 1: Identify the API, Data Schema, & Desired Outcome
 
@@ -180,8 +180,6 @@ func fetchWeatherData(w http.ResponseWriter, r *http.Request) {
 		WHERE city = '%s' AND latitude = %f AND longitude = %f
 	`, projectID, datasetID, tableID, city, latitude, longitude)
 	query := client.Query(maxDateQuery)
-	// ***error checking***
-	log.Printf("Printing client.Query(maxDateQuery):", query)
 	it, err := query.Read(ctx)
 
 	if err != nil {
@@ -199,31 +197,29 @@ func fetchWeatherData(w http.ResponseWriter, r *http.Request) {
 			MaxDate bigquery.NullString `bigquery:"max_date"`
 		}
 		err := it.Next(&row)
-
-        log.Printf("line 108", err)
-
-
 		if err == iterator.Done {
 			break
 		}
 		if err != nil {
-            logger.Log(logging.Entry{
-                Severity: logging.Error,
-                Payload:  "BigQuery iteration error 1: " + err.Error(),
-            })
+      logger.Log(logging.Entry{
+          Severity: logging.Error,
+          Payload:  "BigQuery iteration error 1: " + err.Error(),
+      })
 			log.Printf("Failed to iterate query results: %v", err)
 			http.Error(w, "BigQuery iteration error 0", http.StatusInternalServerError)
 			return
 		}
 		if row.MaxDate.Valid {
-			// ***error checking***
-			log.Printf("line118 check")
 			maxDateStr = row.MaxDate
 		}
 	}
 
 	// Determine start_date: If max_date exists, start from next day; else, 20 years ago.
 	endDate := time.Now().Format("2006-01-02")
+	logger.Log(logging.Entry{
+          Severity: logging.Debug,
+          Payload:  "time.now() returned endDate of: " + endDate + "...and max date in BQ is" + maxDateStr.StringVal,
+	})
 	var startDate string
 	if maxDateStr.Valid {
 		maxDate, _ := time.Parse("2006-01-02", maxDateStr.StringVal)
@@ -366,4 +362,4 @@ Scheduling: Set the DAG to run daily, with no catch-up to avoid redundant runs.
 
 Deployment: Upload the DAG to the /dags folder in the Cloud Composer environment’s Cloud Storage bucket.
 
-I've decided to move the Composer steps to it's own walkthrough file. Head over to (COMPOSER_AIRFLOW.md)[COMPOSER_AIRFLOW.md] to continue the journey.
+I've decided to move the Composer steps to it's own walkthrough file. Head over to [COMPOSER_AIRFLOW.md](./COMPOSER_AIRFLOW.md) to continue the journey.
