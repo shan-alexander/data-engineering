@@ -19,7 +19,7 @@ Before we deep-dive into applied uses of Dataform, we need to understand this Ai
 Let's look at a psuedo-code example of an Airflow DAG using python. In this example, the DAG will ingest Google Analytics data from an API, store it in Google Cloud Storage as a JSON file, then load the new data into BigQuery, then compile the Dataform repo, execute the "data_engineering" tagged SQLX files first, followed by the "analytics_engineering" SQLX files.
 
 >[!NOTE]
-> DAGs are most commonly written in Python, but can be written in other languages. Golang has gained popularity for efficiency & concurrency. We'll stick to Python for now, for readability & simplicity.
+> DAGs are written in Python. Other languages like Golang (speed & concurrency) can be used for API calls in a Cloud Function which is then called from the Airflow DAG. For the example below, we'll keep it all pythonic and not utilize a Cloud Function.
 
 ```python
 from __future__ import annotations
