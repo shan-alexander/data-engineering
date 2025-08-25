@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Many teams and companies are unsure of Dataform's intended use. Dataform is for the **Transform** layer in ELT (**e**xtract from api, **l**oad into data warehouse, **transform** into analytics tables for insights, dashboards, etc). If we are planning to use Airflow DAGs (GCP Cloud Composer) for handling API calls to ingest data, then we have the full ELT covered (Airflow for Extract and Load, Dataform for Transform).
+Many teams and companies are unsure of Dataform's intended use. Dataform is for the **Transform** layer in ELT (**E**xtract from api, **L**oad into data warehouse, **T**ransform into analytics tables for insights, dashboards, etc). If we are planning to use Airflow DAGs (GCP Cloud Composer) for handling API calls to ingest data, then we have the full ELT covered (Airflow for Extract and Load, Dataform for Transform).
 
 Here's an example of how that may look:
 
@@ -17,6 +17,9 @@ In the example above, there is 1 dataform repo for Google Analytics. The airflow
 Before we deep-dive into applied uses of Dataform, we need to understand this Airflow DAG layer, so we can better understand how to approach Dataform.
 
 Let's look at a psuedo-code example of an Airflow DAG using python. In this example, the DAG will ingest Google Analytics data from an API, store it in Google Cloud Storage as a JSON file, then load the new data into BigQuery, then compile the Dataform repo, execute the "data_engineering" tagged SQLX files first, followed by the "analytics_engineering" SQLX files.
+
+>[!NOTE]
+> DAGs are most commonly written in Python, but can be written in other languages. The new kid on the block for data engineering backends is Golang, for efficiency & concurrency. We'll stick to Python for now, for readability & simplicity.
 
 ```python
 from __future__ import annotations
@@ -44,20 +47,20 @@ GIT_COMMITISH = "main"
 
 # BigQuery settings for the ingestion table
 BQ_DATASET = "your_raw_ga_dataset"
-BQ_TABLE = "raw_ga_events_partitioned"
+BQ_TABLE = "raw_ga_events"
 
 # GCS settings for the landing zone
 GCS_BUCKET = "your-gcs-bucket"
 GCS_INGEST_PATH = "ga_data/events"
 
-# Backfill date range
+# Backfill date range, we could make the DAG idempotent or incremental but we'll keep it simple for now.
 START_DATE = date(2025, 1, 1)
 END_DATE = date(2025, 1, 31)
 
-# --- Generate and upload data to GCS ---
-MOCK_API_BASE_URL = "https://jsonplaceholder.typicode.com"
+# Generate and upload data to GCS
+MOCK_API_BASE_URL = "https://example.com/api"
 
-# --- Function definition to simulate API call and upload data to GCS ---
+# Function definition to simulate API call and upload data to GCS
 def generate_and_upload_data_to_gcs(execution_date: date, **kwargs):
     """
     Simulates fetching high-volume data from an external API and uploads it
@@ -66,7 +69,7 @@ def generate_and_upload_data_to_gcs(execution_date: date, **kwargs):
     gcs_hook = GCSHook(gcp_conn_id="google_cloud_default")
     ds = execution_date.strftime("%Y-%m-%d")
 
-    # --- API Call ---
+    # API Call
     print(f"Calling API endpoint: {MOCK_API_BASE_URL}/posts?_limit=100")
     try:
         response = requests.get(f"{MOCK_API_BASE_URL}/posts?_limit=100")
@@ -74,16 +77,15 @@ def generate_and_upload_data_to_gcs(execution_date: date, **kwargs):
         api_data = response.json()
     except requests.exceptions.RequestException as e:
         print(f"Error calling API: {e}")
-        # In a production DAG, you'd handle this error more gracefully,
-        # perhaps by retrying or sending a notification.
+        # In a production DAG, we'd handle this error more gracefully, perhaps by retrying or sending a notification. We'd also import a Google Cloud Logger library, instead of a Pythonic print().
         raise
 
     # Transform API data into a format suitable for BigQuery ingestion
-    # For this example, we'll use the API data to create our mock GA events
+    # For this example, we'll mock some GA events, store in an array of objects (a list of json-formatted dictionaries in python) and simulate uploading to GCS.
     json_lines = []
     num_records = len(api_data) * random.randint(1, 5) # Simulate varying record counts
     for i in range(num_records):
-        # Create a mock record using some data from the API response
+        # Create a mock record of the API response
         record = {
             "event_date": ds,
             "user_id": f"user_{api_data[i % len(api_data)]['userId']}",
@@ -100,7 +102,7 @@ def generate_and_upload_data_to_gcs(execution_date: date, **kwargs):
 
     return gcs_file_path
 
-# --- Airflow DAG Definition ---
+# Airflow DAG Definition
 with DAG(
     dag_id="high_volume_ga_pipeline",
     start_date=START_DATE,
@@ -111,7 +113,7 @@ with DAG(
     description="Loads high-volume GA data from GCS and processes it with Dataform.",
 ) as dag:
 
-    # Use a for loop to create a dynamic number of tasks for each date
+    # Use a for loop to handle any number of tasks for each date
     ingestion_tasks = []
     load_tasks = []
 
@@ -119,7 +121,7 @@ with DAG(
         date_str = dt.strftime("%Y-%m-%d")
 
         # Task 1: Generate and upload data to GCS
-        # This simulates a typical ingestion task from a source API to a landing zone
+        # This simulates a typical ingestion task from a source API to a landing zone (GCS in our case)
         upload_task = PythonOperator(
             task_id=f"upload_data_to_gcs_for_{date_str.replace('-', '_')}",
             python_callable=generate_and_upload_data_to_gcs,
@@ -152,7 +154,7 @@ with DAG(
         git_commitish=GIT_COMMITISH,
     )
 
-    # Task 4: Execute Dataform actions tagged "data_engineering"
+    # Task 4: Execute Dataform actions tagged with "data_engineering" in their config block
     run_data_engineering_stage = DataformCreateWorkflowInvocationOperator(
         task_id="execute_data_engineering_stage",
         project_id=PROJECT_ID,
@@ -170,7 +172,7 @@ with DAG(
         },
     )
 
-    # Task 5: Execute Dataform actions tagged "analytics_engineering"
+    # Task 5: Execute Dataform actions tagged with "analytics_engineering" in their config block
     run_analytics_engineering_stage = DataformCreateWorkflowInvocationOperator(
         task_id="execute_analytics_engineering_stage",
         project_id=PROJECT_ID,
@@ -268,7 +270,7 @@ Based on the concepts above, we can now begin the hands-on portion of this guide
 - Create a new dataform repo
 - Create a workspace
 - Initialize the workspace
-- Give it the folder structure as outlined here: https://cloud.google.com/dataform/docs/structure-repositories (to put it briefly, create 4 folders inside the definitions folder: sources, intermediate, outputs, extra).
+- Give it the folder structure as outlined here: https://cloud.google.com/dataform/docs/structure-repositories (to put it briefly, create a project folder inside the definitions folder, and 4 folders inside the definitions/project-name directory: sources, intermediate, outputs, extra).
 - Make sure you have a workflow_settings.yaml file configured
 
 My yaml file looks like this:
@@ -408,6 +410,9 @@ Now that you've made a few files and your repo is compiling successfully, go ahe
 I've prepared a handful of datasets we can use for experimentation with Dataform, BQML, and Pipe Syntax.
 
 Use the `create_commodities_tables.sqlx` file I've provided in the repo. Copy and paste this into a Dataform file `definitions/extra/create_commodities_tables.sqlx`, and run it. It's too long of a query to put here, hence the separate file. This will give you REAL data with a handful of tables with which you can tinker, analyze, create BQML forecasts, and so on.
+
+> [!NOTE]
+> The commodities data is REAL historical data, the script of which I wrote by hand "back in the day" before LLMs did these kinds of things.
 
 ***
 

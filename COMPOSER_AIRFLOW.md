@@ -1,6 +1,6 @@
 # Cloud Composer aka Airflow
 
-This guide assumes you've already set up a Cloud Run Function, and you want to orchestrate a workflow, a DAG, to trigger that cloud function at specified intervals (daily). If you've not yet done this, visit the [Cloud Functions](CLOUD_FUNCTIONS.md) page for a walkthrough.
+This guide assumes you've already set up a Cloud Run Function, and you want to orchestrate a workflow (ie, a DAG) to trigger that cloud function at specified intervals (daily). If you've not yet done this, visit the [Cloud Functions](CLOUD_FUNCTIONS.md) page for a walkthrough. After the DAG triggers the Cloud Function, we'll instruct the DAG to run scripts in Dataform.
 
 **Getting Started with Composer**
 
@@ -113,3 +113,8 @@ That's it! You've successfully:
 You can head over to BigQuery to see the newly ingested data, and write a few Dataform sqlx files to transform that data into something insightful.
 
 There's much more to learn, in future iterations of this training pack I'll add more useful examples of Cloud Composer, which for the current tutorial is a bit of overkill (would be cheaper to use Cloud Scheduler for this use-case).
+
+## To Do
+
+- Add a few dataform scripts for this weather data, with tags.
+- Add to the DAG additional tasks for compiling and executing Dataform scripts via the tags.
