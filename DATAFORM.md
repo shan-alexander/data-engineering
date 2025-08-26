@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Many company teams are unsure of Dataform's intended use and configuration within the larger data ecosystem. Dataform is for the **Transform** layer in ELT (**E**xtract from api, **L**oad into data warehouse, **T**ransform into analytics tables for insights, dashboards, etc). If we are planning to use Airflow DAGs (GCP Cloud Composer) for handling API calls to ingest data, then we have the full ELT covered (Airflow for Extract and Load, Dataform for Transform). Alternatives to Airflow are mentioned [below](DATAFORM.md#what-alternatives-to-airflow-should-we-consider), with Cloud Workflows being a notable option (serverless, fully managed, pay-per-use, handles dependent tasks, can invoke Dataform executions).
+Many company teams are unsure of Dataform's intended use and configuration within the larger data ecosystem. Dataform is for the **Transform** layer in ELT (**E**xtract from api, **L**oad into data warehouse, **T**ransform into analytics tables for insights, dashboards, etc). If we are planning to use Airflow DAGs (GCP Cloud Composer) for handling API calls to ingest data, then we have the full ELT covered (Airflow for Extract and Load, Dataform for Transform). Alternatives to Airflow are mentioned [below](DATAFORM.md#what-alternatives-to-airflow-should-we-consider), with Cloud Workflows being a notable option (serverless, fully managed, pay-per-use, handles dependent tasks, can invoke Dataform executions, and a bit less complex as the workflow file is a YAML format instead of a pythonic DAG). DAGs and Cloud Workflows are virtually interchangeable unless the pipeline has unique complexity in which DAGs can offer more versatility.
 
 In the visual concept below, there is 1 dataform repo. The Airflow DAG (or Cloud Workflow):
 1. Ingests data from an external API
@@ -22,9 +22,9 @@ Understanding the workflow layer (a sequence of tasks that need to wait for the 
 
 **Challenging the gist above**: Why clutter the Dataform repo with both data engineering scripts and analytics engineering scripts? Won't that bloat the repo, introducing more opportunities for the compiler to fail? Wouldn't it be better to separate data-engineering scripts from analytics scripts into two different Dataform repos?
 
-No. The purpose of Dataform's compiler, and keeping the whole "transform" layer in one Dataform repo, is to ensure that no breaking changes can occur. If a breaking change occurs (e.g., a schema change upstream in the data engineering scripts breaks a series of downstream analytics scripts/tables) then Dataform's compiler will prevent committing the breakage, and Dataform's dependency graph will surface for us the scripts impacted by the breakage. This ensures we fix the entire pipeline (successful compile) before Dataform will allow us to commit the changes into the production (remote origin) repo.
+No. We want the compiler to fail more easily. The purpose of Dataform's compiler, and keeping the whole "transform" layer in one Dataform repo, is to ensure that no breaking changes can occur. If a breaking change occurs (e.g., a schema change upstream in the data engineering scripts breaks a series of downstream analytics scripts/tables) then Dataform's compiler will prevent committing the breakage, and Dataform's dependency graph will surface for us the scripts impacted by the breakage. This ensures we fix the entire pipeline (successful compile) before Dataform will allow us to commit the changes into the production (remote origin) repo.
 
-In short, we WANT the whole data pipeline to be contained within one repo so Dataform's compiler & dependency checker, along with assertion tests, can perform it's function of increasing data integrity.
+In short, we WANT the whole data pipeline to be contained within one repo so Dataform's compiler & dependency checker, along with assertion tests, can perform it's function of increasing data integrity across the entire pipeline.
 
 ---
 
