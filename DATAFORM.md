@@ -14,7 +14,19 @@ In the visual concept below, there is 1 dataform repo. The Airflow DAG (or Cloud
 
 Understanding the workflow layer (a sequence of tasks that need to wait for the upstream task to complete), and how that workflow layer (a DAG, Cloud Workflow YAML, etc) interacts with Dataform can give us a __definitive__ understanding of how to approach Dataform.
 
+---
+
 **The gist: One Dataform repo per one DAG (or equivalent workflow). One Dataform repo contains both data engineering and analytics scripts, which can be categorized by tags to execute from workflows/DAGs.**
+
+---
+
+**Challenging the gist above**: Why clutter the Dataform repo with both data engineering scripts and analytics engineering scripts? Won't that bloat the repo, introducing more opportunities for the compiler to fail? Wouldn't it be better to separate data-engineering scripts from analytics scripts into two different Dataform repos?
+
+No. The purpose of Dataform's compiler, and keeping the whole "transform" layer in one Dataform repo, is to ensure that no breaking changes can occur. If a breaking change occurs (e.g., a schema change upstream in the data engineering scripts breaks a series of downstream analytics scripts/tables) then Dataform's compiler will prevent committing the breakage, and Dataform's dependency graph will surface for us the scripts impacted by the breakage. This ensures we fix the entire pipeline (successful compile) before Dataform will allow us to commit the changes into the production (remote origin) repo.
+
+In short, we WANT the whole data pipeline to be contained within one repo so Dataform's compiler & dependency checker, along with assertion tests, can perform it's function of increasing data integrity.
+
+---
 
 Let's look at a psuedo-code example of an Airflow DAG using python. In this example, the DAG will ingest Google Analytics data from an API, store it in Google Cloud Storage as a JSON file, then load the new data into BigQuery, then compile the Dataform repo, execute the "data_engineering" tagged SQLX files first, followed by the "analytics_engineering" SQLX files.
 
@@ -270,6 +282,7 @@ In an empty instance of Dataform, you first create a repo, and then a workspace.
 - Pay-per-use model. Only pay for the number of steps executed in your workflow.
 - Similar to Airflow, create a sequence of tasks, like calling a Cloud Function to extract data from an API, wait for the function to complete, then call a Dataform job to execute transformation scripts.
 - Contains retry policies, timeout settings, and failure / error handling.
+- Very attractive alternative to Composer/Airflow.
 
 **Dataflow**
 - Streaming data, massive data processing. Ideal for real-time or high-volume data movement.
