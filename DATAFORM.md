@@ -243,7 +243,7 @@ In an empty instance of Dataform, you first create a repo, and then a workspace.
 
 ![image failed to load](img/dataform_repos_workspaces.png "Explanation of Dataform repos & workspaces, made by repo owner shan-alexander")
 
-**Summary of Concepts**
+## Summary of Concepts**
 
 - Dataform is a tool for the transformation aspect of ELT.
 - Airflow is a versatile tool for orchestrating the full ELT pipeline.
@@ -253,6 +253,40 @@ In an empty instance of Dataform, you first create a repo, and then a workspace.
   - Unified Change Management: if data engineering changes a table schema upstream, Dataform will immediately know and surface the downstream tables that break / need updating. These updates will be required to successfully compile, and successful compilation is required to commit.
   - Single, Cohesive Pipeline: The one-repository model creates a single, unified pipeline. This simplifies orchestration and monitoring. Instead of managing multiple, disconnected pipelines, you have one primary process to run and observe in tools like Airflow.
   - Code Redundancy Elimination: DE and DA teams can share and reuse code. For example, a business analysis team can ref() a clean, validated table created by the data engineering team, rather than creating their own duplicate source file.
+- Airflow offers robust failure-handling. Retries are the first approach to failures, followed by email alerts, slack alerts, and other integrations like sms messaging.
+- Dataform introduces assertion tests that compile. The Dataform repo will fail to compile if the asserts fail, preventing both faulty commits and faulty DAG task completions.
+
+## What does excellence look like?
+- One DAG per Dataform repo.
+- 2nd gen Cloud Function for API data extraction. Bonus for Golang (speed, safety, concurrency).
+- Before API extraction, a task runs to ensure API schema and target BigQuery table schema are matching.
+- Cloud Function for API data extraction writes to JSON, dumps in cloud storage (`gcs_hook.upload(bucket_name=GCS_BUCKET, object_name=gcs_file_path, data=file_content, mime_type='application/json')`), and checks for corrupt data (unexpected data types, regex asserts, etc) before loading into to BQ using `BigQueryLoadJobOperator`.
+- Data is not passed between Airflow DAG tasks. XComs are for small, serializable metadata, nothing more than a few kilobytes.
+
+### What alternatives to Airflow should we consider?
+
+**Google Cloud Workflows**
+- Serverless & fully managed, define your workflow in a YAML or JSON file, Google handles the execution.
+- Pay-per-use model. Only pay for the number of steps executed in your workflow.
+- Similar to Airflow, create a sequence of tasks, like calling a Cloud Function to extract data from an API, wait for the function to complete, then call a Dataform job to execute transformation scripts.
+- Contains retry policies, timeout settings, and failure / error handling.
+
+**Dataflow**
+- Streaming data, massive data processing. Ideal for real-time or high-volume data movement.
+- Based on Apache Beam. Can read from streaming sources like Kafka. A single pipeline can handle both batch and stream processing.
+- Generally easier to use than Dataproc (batch processing only), as it handles scaling, resource management, and optimizations automatically (serveless, managed).
+
+**Cloud Scheduler**
+- Simple cron jobs.
+- If the pipeline is just a single independent task that needs to run once per day, this is the best solution.
+- No concept of dependency between jobs.
+- Can trigger a Dataform workflow invocation directly.
+
+**Dataform scheduled workflows**
+- Simple cron jobs that can be configured from within Dataform to execute the repo at specified times.
+- Good for BigQuery-centric transformations that do not depend on API data ingestion.
+- No dependency management on external systems. For example, can't schedule a Dataform run to begin after a Cloud Function has finished ingesting data. It assumes the targeted data source is always ready in BigQuery at the scheduled time.
+
 
 ---
 
