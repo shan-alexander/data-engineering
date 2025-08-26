@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Many company teams are unsure of Dataform's intended use and configuration within the larger data ecosystem. Dataform is for the **Transform** layer in ELT (**E**xtract from api, **L**oad into data warehouse, **T**ransform into analytics tables for insights, dashboards, etc). If we are planning to use Airflow DAGs (GCP Cloud Composer) for handling API calls to ingest data, then we have the full ELT covered (Airflow for Extract and Load, Dataform for Transform). Alternatives to Airflow are mentioned [below](README.md#Summary), with Cloud Workflows being a notable option (serverless, fully managed, pay-per-use, can invoke Dataform executions).
+Many company teams are unsure of Dataform's intended use and configuration within the larger data ecosystem. Dataform is for the **Transform** layer in ELT (**E**xtract from api, **L**oad into data warehouse, **T**ransform into analytics tables for insights, dashboards, etc). If we are planning to use Airflow DAGs (GCP Cloud Composer) for handling API calls to ingest data, then we have the full ELT covered (Airflow for Extract and Load, Dataform for Transform). Alternatives to Airflow are mentioned [below](DATAFORM.md#what-alternatives-to-airflow-should-we-consider), with Cloud Workflows being a notable option (serverless, fully managed, pay-per-use, handles dependent tasks, can invoke Dataform executions).
 
 In the visual concept below, there is 1 dataform repo. The Airflow DAG (or Cloud Workflow):
 1. Ingests data from an external API
@@ -12,10 +12,9 @@ In the visual concept below, there is 1 dataform repo. The Airflow DAG (or Cloud
 
 ![image failed to load](img/de_concept_airflow_dataform.png "Diagram of airflow + dataform concept, made by repo owner shan-alexander")
 
+Understanding the workflow layer (a sequence of tasks that need to wait for the upstream task to complete), and how that workflow layer (a DAG, Cloud Workflow YAML, etc) interacts with Dataform can give us a __definitive__ understanding of how to approach Dataform.
 
-Understanding the workflow layer (a sequence of tasks that need to wait for the upstream task to complete), and how that workflow layer (a DAG, Cloud Workflow YAML, etc) interacts with Dataform can give us a definitive understanding of how to approach Dataform.
-
-**The gist: One Dataform repo per one DAG (or equivalent workflow).**
+**The gist: One Dataform repo per one DAG (or equivalent workflow). One Dataform repo contains both data engineering and analytics scripts, which can be categorized by tags to execute from workflows/DAGs.**
 
 Let's look at a psuedo-code example of an Airflow DAG using python. In this example, the DAG will ingest Google Analytics data from an API, store it in Google Cloud Storage as a JSON file, then load the new data into BigQuery, then compile the Dataform repo, execute the "data_engineering" tagged SQLX files first, followed by the "analytics_engineering" SQLX files.
 
