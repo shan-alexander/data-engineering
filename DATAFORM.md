@@ -265,10 +265,58 @@ In an empty instance of Dataform, you first create a repo, and then a workspace.
   - Unified Change Management: if data engineering changes a table schema upstream, Dataform will immediately know and surface the downstream tables that break / need updating. These updates will be required to successfully compile, and successful compilation is required to commit.
   - Single, Cohesive Pipeline: The one-repository model creates a single, unified pipeline. This simplifies orchestration and monitoring. Instead of managing multiple, disconnected pipelines, you have one primary process to run and observe in tools like Airflow.
   - Code Redundancy Elimination: DE and DA teams can share and reuse code. For example, a business analysis team can ref() a clean, validated table created by the data engineering team, rather than creating their own duplicate source file.
+  - Encourages Collaboration: It creates a clear contract between teams. The data engineering team provides clean, reliable data products, and the analytics team consumes them to create business-ready insights. Both operate within the same Dataform repo, using an example folder structure like `/definitions/de` (de = data engineering) and `definitions/ae` (analytics engineering).
 - Airflow offers robust failure-handling. Retries are the first approach to failures, followed by email alerts, slack alerts, and other integrations like sms messaging.
 - Dataform introduces assertion tests that compile. The Dataform repo will fail to compile if the asserts fail, preventing both faulty commits and faulty DAG task completions.
 
-## What does excellence look like?
+### How do we structure the Dataform repo directories per best practices?
+
+Google provides a recommended best-practice for Dataform repo's here: [https://cloud.google.com/dataform/docs/best-practices-repositories](https://cloud.google.com/dataform/docs/best-practices-repositories)
+
+However the documentation does not explain the dichotomy between data-engineering & analytics-engineering, and how multiple projects or data pipelines could co-exist within one repo.
+
+Here's an example of how to approach this:
+
+```
+/definitions/sources/   ---> the folder for declaring tables, so that all sqlx queries use ${ref()}.
+/definitions/de/        ---> the data engineering folder.
+/definitions/ae/        ---> the analytics engineering folder.
+
+/definitions/de/intermediate/  ---> ideally create-view scripts that transform the data into reliable outputs.
+/definitions/de/outputs/       ---> ideally create-table scripts that provide "staging" tables to analytics engineers.
+
+/definitions/ae/intermediate/  ---> ideally create-view scripts that transform the data into business insights for dashboard ingestion, looker modeling, etc.
+/definitions/ae/outputs/       ---> ideally create-table scripts that provide the "gold-medallion" tables to reporting layers.
+```
+
+Why create-view scripts in the intermediate folder and create-table scripts in the outputs folder? Because the intermediate folder is intended for transformations, and these transformations are almost always changing (as schemas change, business logic changes, etc). Hence we use the /ae/outputs/ folder to:
+
+`/definitions/ae/outputs/rpt_google_analytics_daily_agg.sqlx`
+```sql
+config {
+  type: "table"
+  name: "rpt_google_analytics_daily_agg"
+}
+select * from ${ref("v_analytics_daily_agg)}
+```
+
+Why is this great? Because now, if Google Analytics (from the example above) forces all its users to migrate to a new API like they did in 2024 (GA 360 to GA4), and the whole backend needs to be redone, this can occur seamlessly without having to update the reporting layers (lookml, etc). The reporting layers can still rely on `rpt_google_analytics_daily_agg`, while the `v_analytics_daily_agg` is swapped out for `v_ga4_daily_agg` or something like that. Same goes for backend data pipeline cleanups, when a long-standing high-value dashboard needs to be revamped, and the data pipeline has years of outdated legacy code, a data engineer can "do surgery" on the intermediate queries (silver medallion architecture concept) and do indiana-jones swaps, without affecting downstream naming conventions, causing breakages, etc.
+
+The data engineering team can use the same idea:
+
+`/definitions/de/outputs/stg_google_analytics_events`
+```sql
+config {
+  type: "table"
+  name: "stg_google_analytics_events"
+}
+select * from ${ref("v_google_analytics_events)}
+```
+
+This approach (above) ensures that the analytics engineering team can always rely on a stage table to be there, named `stg_google_analytics_events` and even if GA4 does a migration to a new paradigm, the migration will occur in the /intermediate/ layer (maybe a UNION of old GA4 data and new GA5 data) which will still output to the same `stg_google_analytics_events` table.
+
+
+### What does excellence look like?
 - One DAG per Dataform repo.
 - 2nd gen Cloud Function for API data extraction. Bonus for Golang (speed, safety, concurrency).
 - Before API extraction, a task runs to ensure API schema and target BigQuery table schema are matching.
