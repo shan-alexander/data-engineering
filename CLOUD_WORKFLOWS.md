@@ -6,7 +6,7 @@ Note: this is a work-in-progress, much cleanup to do, screenshots to add.
 
 Google Cloud Workflows is a serverless orchestration service that allows you to automate and chain together Google Cloud services and APIs into reliable, repeatable pipelines. This tutorial is designed for data engineers and analytics engineers building scalable data workflows, as well as team managers wanting to ensure their teams adopt efficient, maintainable practices. We'll focus on using Workflows for data ingestion (e.g., calling a Cloud Function to fetch API data, load it to Google Cloud Storage (GCS), and then to BigQuery (BQ)) and executing Dataform repositories for transformations.
 
-The serverless nature of Workflows eliminates infrastructure management, allowing teams to focus on logic, data integrity, data governance, value contribution, and other important aspects of maintaining a healthy data ecosystem (instead of bloating the team with the staff needed to maintain kubernetes clusters and manual scaling, etc., &&&&&&&).
+The serverless nature of Workflows eliminates infrastructure management, allowing teams to focus on logic, data integrity, data governance, value contribution, and other important aspects of maintaining a healthy data ecosystem (instead of bloating the team with the staff needed to self-manage kubernetes clusters and manually scale, etc).
 
 We'll cover YAML syntax basics, example workflows, error handling (retries, timeouts), and notifications (email/Slack).
 
