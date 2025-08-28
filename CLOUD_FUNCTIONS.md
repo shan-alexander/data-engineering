@@ -62,7 +62,7 @@ CREATE TABLE `your_project_id.your_dataset_id.weather_data` (
 
 **Desired Outcome**:
 
-A Cloud Function that using Golang to extract data from the API, backfill it into a BigQuery table for the past 20 years, but if the table is already backfilled, just ingest the newest data.
+A Cloud Function that uses Golang to extract data from the API, backfill it into a BigQuery table for the past 20 years, but if the table is already backfilled, just ingest the newest data.
 
 ## Step 2: Configure the Cloud Function.
 
