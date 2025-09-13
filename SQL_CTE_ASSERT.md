@@ -71,13 +71,17 @@ group by all
 )
 -- select * from pageclicks limit 100
 
+-- here we redo the previous asserts, ensuring the join did not cause unexpected results
 assert(
-  select count(*) > 1000 AND
-  COUNTIF(page_id IS NULL) = 0 AND
-  min(sum_pageviews) > 0 AND
+  select count(*) > 1000 AND COUNTIF(page_id IS NULL) = 0 AND min(sum_pageviews) > 0
+  FROM pageclicks
+) as 'Webpages have at least 1 pageview and no null page_ids. Should return more than 1000 rows.'
+
+-- and follow with a new assert
+assert(
   min(sum_clicks) >= 0
   FROM pageclicks
-) as 'Webpages should have 0 or more clicks and previous asserts met.'
+) as 'Webpages should have 0 or more clicks.'
 
 , final_output as (
 select
@@ -89,6 +93,9 @@ group by all
 )
 -- select * from final_output limit 100
 
+-- here I show an example of stacking multiple asserts, but it would be more helpful
+-- to separate these into different asserts with unique messages, so that troubleshooting
+-- is easier, ie so you can more easily identify which condition failed.
 assert(
   select count(*) > 1000 AND
   COUNTIF(page_id IS NULL) = 0 AND
@@ -96,16 +103,28 @@ assert(
   min(sum_revenue) >= 0 AND
   max(sum_revenue) < 1000000 AND
   COUNTIF(sum_revenue is null) = 0 AND
-  COUNT(*) = COUNT(DISTINCT page_id) --no dupes
+  COUNT(*) = COUNT(DISTINCT page_id) --condition tests for dupe page_id's which in this example ought to fail, it ought to be written as the assert below.
   FROM final_output
 ) as 'Revenue column values should not be null, should be a float of 0 or more.'
+
+-- one more assert example, using a subquery, demonstrating how to test for unique primary keys involving more than one column (page_id and date):
+ASSERT (
+  SELECT count(1)
+   FROM (
+    SELECT
+      page_id, date
+    FROM final_output
+    GROUP BY all
+    HAVING count(1) > 1 ) ) = 0
+  AS 'There are duplicate page_id and date combinations. Clean that mess up!';
+
 ```
 
 The difference in the example above is that we apply ASSERT conditions to the output of each CTE, and we give each assert a particular message to throw in the error message if the assert does not pass.
 
 Why not put all the ASSERTs in a separate script, and run the assert script in a workflow? Because then, the script can only test the final output, and does not test each CTE. Therefore, troubleshooting will be more difficult. If each CTE has its own ASSERTs and each assert has a unique error message, we will know exactly which CTE is causing the fail.
 
-This is a powerful concept!
+**This is a powerful concept!**
 
 I've written thousands of complex SQL queries with long chains of CTEs, and never wrote with ASSERTs after each CTE. As of 2025, all my CTEs receive their own ASSERTs, and I believe it's the most technically-excellent approach to ensuring data quality, maintainability, ease of troubleshooting, etc. Of course we still want DBT/Dataform assertions in the config block, or an assert script in our workflows, but these only assert the final output and not the output of each CTE. If we write asserts for each CTE, our ability to troubleshoot is improved, and the data asset is increased in value (high trust).
 
